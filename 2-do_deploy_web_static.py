@@ -5,9 +5,9 @@ from fabric.api import env
 from fabric.api import put
 from fabric.api import run
 
-# Update these with your actual server IP addresses and SSH key
-env.hosts = ['18.204.14.176', '54.226.7.139']
-env.user = 'ubuntu'
+
+env.hosts = ["18.204.14.176", "54.226.7.139"]
+
 
 def do_deploy(archive_path):
     """Distributes an archive to a web server.
