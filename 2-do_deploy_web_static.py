@@ -1,54 +1,38 @@
 #!/usr/bin/python3
-"""
-Fabric script for deploying an archive to web servers.
-"""
-
-from fabric.api import env, put, run
-from os.path import exists
-from os import remove
+"""Script that does the deployment"""
 import os
+from fabric.api import run, put, env
 
-# Update these with your actual server IP addresses and SSH key
+
 env.hosts = ['18.204.14.176', '54.226.7.139']
-env.user = 'ubuntu'
-env.key_filename = 'etc/letsencrypt/live/www.mhfsoft.tech/fullchain.pem'
+
 
 def do_deploy(archive_path):
-    """
-    Distributes an archive to web servers and deploys it.
-    """
-    if not exists(archive_path):
+    """Distributes an archive to your web servers"""
+
+    mkdir_cmd = "mkdir -p /data/web_static/releases/"
+    rm_cmd = "rm -rf /data/web_static/releases/"
+    deployed_success = "New Version Deployed!"
+    if os.path.exists(archive_path):
+        try:
+            put(archive_path, "/tmp/")
+            filename = archive_path.split('/', 1)
+            no_ext = filename[1].split('.', 1)
+            file_name = no_ext[0]
+            run(mkdir_cmd + file_name + "/")
+            run("tar -zxf /tmp/" + filename[1] +
+                " -C /data/web_static/releases/" +
+                file_name + "/")
+            run("rm /tmp/" + filename[1])
+            run("mv /data/web_static/releases/" + file_name +
+                "/web_static/* /data/web_static/releases/" + file_name + "/")
+            run(rm_cmd + file_name + "/web_static")
+            run("rm -rf /data/web_static/current")
+            run("ln -s /data/web_static/releases/" + file_name +
+                "/ /data/web_static/current")
+            print("{}".format(deployed_success))
+            return True
+        except:
+            return False
+    else:
         return False
-
-    try:
-        # Upload the archive to the /tmp/ directory of the web server
-        put(archive_path, '/tmp/')
-
-        # Extract the filename without extension
-        archive_filename = os.path.basename(archive_path)
-        archive_name = os.path.splitext(archive_filename)[0]
-
-        # Create the release directory
-        release_dir = f'/data/web_static/releases/{archive_name}'
-        run(f'mkdir -p {release_dir}')
-
-        # Uncompress the archive to the release directory
-        run(f'tar -xzf /tmp/{archive_filename} -C {release_dir}')
-
-        # Delete the archive from the web server
-        run(f'rm /tmp/{archive_filename}')
-
-        # Delete the symbolic link /data/web_static/current
-        current_link = '/data/web_static/current'
-        if exists(current_link):
-            run(f'rm {current_link}')
-
-        # Create a new symbolic link to the new version
-        run(f'ln -s {release_dir} {current_link}')
-
-        print('New version deployed!')
-        return True
-    except Exception as e:
-        print(f'Error: {e}')
-        return False
-
