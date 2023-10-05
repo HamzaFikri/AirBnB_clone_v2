@@ -1,35 +1,41 @@
 #!/usr/bin/env bash
 # Sets up a web server for deployment of web_static.
 
-apt-get update
-apt-get install -y nginx
+#!/bin/bash
 
-mkdir -p /data/web_static/releases/test/
-mkdir -p /data/web_static/shared/
+# Install Nginx if not already installed
+if ! dpkg -l | grep -q nginx; then
+    apt-get update
+    apt-get -y install nginx
+fi
+
+# Create necessary folders if they don't exist
+mkdir -p /data/web_static/releases/test
+mkdir -p /data/web_static/shared
+
+# Create a fake HTML file for testing
 echo "Holberton School" > /data/web_static/releases/test/index.html
-ln -sf /data/web_static/releases/test/ /data/web_static/current
 
-chown -R ubuntu /data/
-chgrp -R ubuntu /data/
+# Create or recreate the symbolic link
+if [ -L /data/web_static/current ]; then
+    rm /data/web_static/current
+fi
+ln -s /data/web_static/releases/test /data/web_static/current
 
-printf %s "server {
-    listen 80 default_server;
-    listen [::]:80 default_server;
-    add_header X-Served-By $hostname;
-    root   /var/www/html;
-    index  index.html index.htm;
+# Give ownership of /data/ folder to the ubuntu user and group recursively
+chown -R ubuntu:ubuntu /data/
+
+# Update Nginx configuration to serve web_static
+config_file="/etc/nginx/sites-available/default"
+nginx_config="
+server {
     location /hbnb_static {
-        alias /data/web_static/current;
-        index index.html index.htm;
+        alias /data/web_static/current/;
     }
-    location /redirect_me {
-        return 301 http://github.com/HamzaFikri;
-    }
-    error_page 404 /404.html;
-    location /404 {
-      root /var/www/html;
-      internal;
-    }
-}" > /etc/nginx/sites-available/default
+}
+"
+echo "$nginx_config" > "$config_file"
 
+# Restart Nginx to apply changes
 service nginx restart
+
