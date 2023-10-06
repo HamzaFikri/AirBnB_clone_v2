@@ -1,30 +1,49 @@
 #!/usr/bin/python3
 """Script that does the deployment"""
-from fabric.api import *
+from fabric.api import task, local, env, put, run
 from datetime import datetime
-import os.path
+import os
 
 env.hosts = ['18.204.14.176', '54.226.7.139']
 
 
-def do_deploy(archive_path):
-    """transfer files to web server"""
+@task
+def do_pack():
+    """ method doc
+        sudo fab -f 1-pack_web_static.py do_pack
+    """
+    formatted_dt = datetime.now().strftime('%Y%m%d%H%M%S')
+    mkdir = "mkdir -p versions"
+    path = "versions/web_static_{}.tgz".format(formatted_dt)
+    print("Packing web_static to {}".format(path))
+    if local("{} && tar -cvzf {} web_static".format(mkdir, path)).succeeded:
+        return path
+    return None
 
-    if os.path.isfile(archive_path):
-        pre_path = archive_path.split("/")[1]
+
+@task
+def do_deploy(archive_path):
+    """ method doc
+        fab -f 2-do_deploy_web_static.py do_deploy:
+        archive_path=versions/web_static_20231004201306.tgz
+        -i ~/.ssh/id_rsa -u ubuntu
+    """
+    try:
+        if not os.path.exists(archive_path):
+            return False
+        fn_with_ext = os.path.basename(archive_path)
+        fn_no_ext, ext = os.path.splitext(fn_with_ext)
+        dpath = "/data/web_static/releases/"
         put(archive_path, "/tmp/")
-        path_l = "/tmp/" + pre_path
-        path_r = "/data/web_static/releases/" + pre_path.split(".")[0]
-        sudo("mkdir -p {:s}".format(path_r))
-        sudo("tar -xzf {:s} -C {:s}".format(path_l, path_r))
-        sudo("rm {:s}".format(path_l))
-        path_m = path_r + "/web_static/*"
-        path_d = path_r + "/web_static/"
-        sudo("mv {:s} {:s}".format(path_m, path_r))
-        sudo("rm -rf {:s}".format(path_d))
-        sudo("rm -rf /data/web_static/current")
-        sudo("ln -s {:s} /data/web_static/current".format(path_r))
+        run("rm -rf {}{}/".format(dpath, fn_no_ext))
+        run("mkdir -p {}{}/".format(dpath, fn_no_ext))
+        run("tar -xzf /tmp/{} -C {}{}/".format(fn_with_ext, dpath, fn_no_ext))
+        run("rm /tmp/{}".format(fn_with_ext))
+        run("mv {0}{1}/web_static/* {0}{1}/".format(dpath, fn_no_ext))
+        run("rm -rf {}{}/web_static".format(dpath, fn_no_ext))
+        run("rm -rf /data/web_static/current")
+        run("ln -s {}{}/ /data/web_static/current".format(dpath, fn_no_ext))
         print("New version deployed!")
         return True
-    else:
+    except Exception:
         return False
